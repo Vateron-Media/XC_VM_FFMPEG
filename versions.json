@@ -1,0 +1,20 @@
+{
+  "_comment": "Build matrix for XC_VM_FFMPEG. Source of truth for local builds is the bash arrays in build_ffmpeg_all.sh; this file mirrors them for humans/CI. Keep in sync.",
+
+  "ffmpeg_versions": {
+    "_comment": "panel label (asset name + panel ffmpeg_bin/<label> bucket) -> ffmpeg release tarball version to compile.",
+    "4.0": "4.4.5",
+    "7.1": "7.1",
+    "8.1": "8.1"
+  },
+
+  "distros": {
+    "_comment": "distro tag (asset suffix) -> docker base image. Rocky_9 is TODO: build_ffmpeg.sh is apt-only and needs a dnf port of install_build_tools.",
+    "debian_11": "debian:11",
+    "debian_12": "debian:12",
+    "debian_13": "debian:13",
+    "ubuntu_20": "ubuntu:20.04",
+    "ubuntu_22": "ubuntu:22.04",
+    "ubuntu_24": "ubuntu:24.04"
+  }
+}

@@ -1,0 +1,103 @@
+name: Build & Release FFmpeg
+
+# Manual only: static FFmpeg is a from-source compile of ~20 codec libraries per
+# job, so we never run it on push. Each (version × distro) pair is one matrix job
+# and they run in parallel; the release job then bundles every asset + hashes.md5.
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: "Release tag (bare semver, e.g. 1.0.0)"
+        required: true
+      draft:
+        description: "Publish as draft (uncheck to release immediately)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Derive the build matrix from the single source of truth (the driver). ────
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: gen
+        run: |
+          set -euo pipefail
+          json="$(./build_ffmpeg_all.sh --print-matrix)"
+          echo "include=$(echo "$json" | jq -c '.include')" >> "$GITHUB_OUTPUT"
+
+  # ── One job per (distro × version): build inside the distro's own container. ──
+  build:
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard bare-semver tag
+        run: |
+          [[ "${{ inputs.version_tag }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "version_tag must be bare semver (no 'v'): ${{ inputs.version_tag }}"; exit 1; }
+
+      - name: Build ffmpeg ${{ matrix.label }} for ${{ matrix.distro }}
+        run: |
+          set -euo pipefail
+          docker build -t "xcvm-ffmpeg:${{ matrix.distro }}" \
+            --build-arg BASE_IMAGE="${{ matrix.base }}" \
+            -f docker/Dockerfile .
+          mkdir -p out
+          docker run --rm -v "$PWD/out:/out" \
+            -e "V_FFMPEG=${{ matrix.tarball }}" \
+            -e "FF_LABEL=${{ matrix.label }}" \
+            -e "FF_DISTRO=${{ matrix.distro }}" \
+            "xcvm-ffmpeg:${{ matrix.distro }}"
+
+      - name: Upload asset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg_${{ matrix.label }}_${{ matrix.distro }}
+          path: out/ffmpeg_${{ matrix.label }}_${{ matrix.distro }}.tar.gz
+          if-no-files-found: error
+          retention-days: 2
+
+  # ── Collect every asset, build hashes.md5, cut the release. ──────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all assets
+        uses: actions/download-artifact@v4
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Generate hashes.md5
+        run: |
+          set -euo pipefail
+          cd staging
+          md5sum ffmpeg_*.tar.gz > hashes.md5
+          echo "=== assets ==="; ls -lh ffmpeg_*.tar.gz
+          echo "=== hashes.md5 ==="; cat hashes.md5
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd staging
+          gh release create "${{ inputs.version_tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "FFmpeg ${{ inputs.version_tag }}" \
+            --notes "Per-distro static FFmpeg builds. Each asset is ffmpeg_<label>_<distro>.tar.gz (ffmpeg+ffprobe, codecs static, glibc matched to the distro). Verify with hashes.md5." \
+            ${{ inputs.draft && '--draft' || '' }} \
+            ffmpeg_*.tar.gz hashes.md5
