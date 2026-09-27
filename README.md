@@ -133,6 +133,7 @@ FF=/home/xc_vm/bin/ffmpeg_bin/7.1/ffmpeg FP=.../ffprobe FF_LABEL=7.1 ./builds/te
 | Path | Role |
 |------|------|
 | `builds/build_ffmpeg.sh` | the actual builder — one distro per run (env: `V_FFMPEG`, `FF_LABEL`, `FF_DISTRO`, `OUT_DIR`). Compiles every codec static, verifies the result is self-contained (only glibc/libgcc dynamic), self-tests before packaging. |
+| `builds/install_tools.sh` | build toolchain (apt + pip meson); baked into the image as its own layer, run by the builder only on a bare host. |
 | `builds/test-ffmpeg.sh` | pre-publish test battery — codecs/GPU/functional; run in-container at build time and standalone in CI/manual. |
 | `builds/build_ffmpeg_all.sh` | matrix driver: builds the per-distro image, runs the builder per version, writes flat assets + `hashes.md5`. |
 | `docker/Dockerfile` | one Dockerfile, distro selected via `--build-arg BASE_IMAGE=…`. |

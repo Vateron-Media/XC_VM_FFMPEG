@@ -177,21 +177,16 @@ build() {
 }
 
 # ── Build-tool installation (Debian) ───────────────────────────────────────────
+# The docker image already has them (install_tools.sh is its own layer); a bare host
+# gets them installed once.
 install_build_tools() {
-    step "Installing build tools (APT)"
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq --no-install-recommends \
-        build-essential yasm nasm cmake git pkg-config \
-        autoconf automake libtool gperf texinfo \
-        wget tar xz-utils unzip ca-certificates \
-        python3 python3-pip ninja-build perl
-    # Debian 11 ships meson 0.56; some recent libs want newer — use a fresh pip one.
-    # Newer distros (ubuntu 24, debian 12+) mark the system Python externally-managed
-    # (PEP 668), so a plain pip install errors out — fall back to --break-system-packages.
-    pip3 install --quiet --upgrade meson ninja 2>/dev/null \
-        || pip3 install --quiet --upgrade --break-system-packages meson ninja
-    hash -r
+    if [[ -f /etc/xcvm-build-tools ]]; then
+        msg "Build tools preinstalled (image layer)"
+    else
+        step "Installing build tools (APT)"
+        "$(cd "$(dirname "$0")" && pwd)/install_tools.sh"
+        hash -r
+    fi
     msg "Tool versions: $(gcc -dumpversion) / nasm $(nasm -v | awk '{print $3}') / meson $(meson --version) / cmake $(cmake --version | head -1 | awk '{print $3}')"
 }
 

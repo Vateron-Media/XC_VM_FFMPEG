@@ -11,8 +11,13 @@ FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /build
 
-# Build script (installs its own apt build-deps and compiles every codec from source)
-# + the self-test battery it runs before packaging.
+# Toolchain first, in its own layer: apt runs once per image, and edits to the build
+# scripts below don't invalidate it.
+COPY builds/install_tools.sh /build/install_tools.sh
+RUN /build/install_tools.sh && rm -rf /var/lib/apt/lists/*
+
+# Build script (compiles every codec from source) + the self-test battery it runs
+# before packaging.
 COPY builds/build_ffmpeg.sh /build/build_ffmpeg.sh
 COPY builds/test-ffmpeg.sh  /build/test-ffmpeg.sh
 RUN chmod +x /build/build_ffmpeg.sh /build/test-ffmpeg.sh

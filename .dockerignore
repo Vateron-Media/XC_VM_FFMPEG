@@ -1,4 +1,5 @@
 # Build context only needs the scripts the Dockerfile COPYs (keeps out/, .cache/, downloads/ out).
 *
+!builds/install_tools.sh
 !builds/build_ffmpeg.sh
 !builds/test-ffmpeg.sh
