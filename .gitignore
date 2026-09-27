@@ -2,3 +2,4 @@
 /logs/
 /.cache/
 *.log
+graphify-out/*
