@@ -4,7 +4,7 @@
   "ffmpeg_versions": {
     "_comment": "panel label -> ffmpeg release tarball to compile per-distro (all GPU-enabled). 4.0 rebuilt from 4.4.5; the XUI '-nofix_dts' custom flag is absent from stock ffmpeg (native dca decode still works) — panel must stop sending it.",
     "4.0": "4.4.5",
-    "7.1": "7.1",
+    "7.1": "7.1.5",
     "8.1": "8.1"
   },
 

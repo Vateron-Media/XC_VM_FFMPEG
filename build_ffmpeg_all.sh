@@ -44,7 +44,7 @@ USE_CACHE=1; [[ -n "${NO_CACHE:-}" ]] && USE_CACHE=0
 # (StreamProcess dts_legacy_ffmpeg path) — native `dca` decode still works.
 declare -A FFMPEG_VERSIONS=(
     [4.0]="4.4.5"
-    [7.1]="7.1"
+    [7.1]="7.1.5"
     [8.1]="8.1"
 )
 # Panel label -> nv-codec-headers tag (must match the ffmpeg major; n12 is too
