@@ -375,7 +375,9 @@ build_dependencies() {
     build opus       b_opus
     build lame       b_lame
     build fdkaac     b_fdkaac
-    build nvheaders  b_nv_codec_headers
+    # Header-only and version-specific (n11 for 4.x, n12 for 7.1/8.1) while the deps
+    # cache is shared by all versions of a distro → reinstall every run, never stamp.
+    step "Installing nv-codec-headers ${V_NVHEADERS}"; b_nv_codec_headers
     build librtmp    b_librtmp
     build ogg        b_ogg
     build vorbis     b_vorbis
