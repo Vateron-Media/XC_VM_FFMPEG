@@ -31,8 +31,8 @@ set -euo pipefail
 #   FF_DISTRO  — distro tag baked into the asset name & BUILD_INFO (e.g. ubuntu_20)
 #   OUT_DIR    — output directory (default: ./out)
 #
-# Output: $OUT_DIR/ffmpeg, $OUT_DIR/ffprobe,
-#         $OUT_DIR/ffmpeg_<label>[_<distro>].tar.gz
+# Output: $OUT_DIR/ffmpeg_<label>[_<distro>].tar.gz  (binaries staged privately
+#         and packed in; out/ stays clean — only archives + hashes.md5)
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Versions (single place to bump; kept here rather than versions.json because
@@ -470,19 +470,33 @@ verify_static() {
 
 # ── Package ────────────────────────────────────────────────────────────────────
 package() {
-    step "Packaging into $OUT_DIR"
     local ff="$FF_PREFIX/bin/ffmpeg" fp="$FF_PREFIX/bin/ffprobe"
     [[ -x "$ff" ]] || die "ffmpeg not built"
     [[ -x "$fp" ]] || die "ffprobe not built"
 
-    install -m 0755 "$ff" "$OUT_DIR/ffmpeg"
-    install -m 0755 "$fp" "$OUT_DIR/ffprobe"
-    strip --strip-unneeded "$OUT_DIR/ffmpeg" "$OUT_DIR/ffprobe" 2>/dev/null || true
+    # Flat per-(version×distro) archive: out/ffmpeg_<label>[_<distro>].tar.gz.
+    # The filename IS the release-asset name (GitHub release assets are a flat
+    # namespace), so upload needs no rename and md5sum yields the exact name the
+    # panel's getAssetHash looks up.
+    local suffix=""
+    [[ -n "$FF_DISTRO" ]] && suffix="_${FF_DISTRO}"
+    local archive="ffmpeg_${FF_LABEL}${suffix}.tar.gz"
 
-    verify_static "$OUT_DIR/ffmpeg"
-    verify_static "$OUT_DIR/ffprobe"
+    # Stage binaries in a private per-build dir so out/ only ever holds the
+    # finished archives + hashes.md5 — never loose ffmpeg/ffprobe/BUILD_INFO that
+    # successive matrix builds would overwrite and leave behind.
+    local stage="$OUT_DIR/.stage_${FF_LABEL}${suffix}"
+    step "Packaging $archive"
+    rm -rf "$stage"; mkdir -p "$stage"
 
-    cat > "$OUT_DIR/BUILD_INFO" <<EOF
+    install -m 0755 "$ff" "$stage/ffmpeg"
+    install -m 0755 "$fp" "$stage/ffprobe"
+    strip --strip-unneeded "$stage/ffmpeg" "$stage/ffprobe" 2>/dev/null || true
+
+    verify_static "$stage/ffmpeg"
+    verify_static "$stage/ffprobe"
+
+    cat > "$stage/BUILD_INFO" <<EOF
 Built by : XC_VM FFmpeg static builder
 FFmpeg   : ${V_FFMPEG}
 Label    : ${FF_LABEL}
@@ -494,13 +508,19 @@ Arch     : $(uname -m)
 Strategy : all codecs static, glibc dynamic (verified self-contained)
 EOF
 
-    # Flat per-(version×distro) archive: out/ffmpeg_<label>[_<distro>].tar.gz.
-    # The filename IS the release-asset name, so upload needs no rename and
-    # md5sum yields the exact name the panel's getAssetHash looks up.
-    local suffix=""
-    [[ -n "$FF_DISTRO" ]] && suffix="_${FF_DISTRO}"
-    local archive="ffmpeg_${FF_LABEL}${suffix}.tar.gz"
-    ( cd "$OUT_DIR" && tar czf "$archive" ffmpeg ffprobe BUILD_INFO )
+    # Self-test on this exact glibc BEFORE blessing the archive — a broken build
+    # must never be packaged. Runs the full battery in test-ffmpeg.sh.
+    local selftest
+    selftest="$(cd "$(dirname "$0")" && pwd)/test-ffmpeg.sh"
+    if [[ -f "$selftest" ]]; then
+        FF="$stage/ffmpeg" FP="$stage/ffprobe" FF_LABEL="$FF_LABEL" \
+            bash "$selftest" || die "self-tests failed — not packaging ${FF_LABEL}/${FF_DISTRO:-?}"
+    else
+        warn "test-ffmpeg.sh not found next to builder — skipping self-tests"
+    fi
+
+    ( cd "$stage" && tar czf "$OUT_DIR/$archive" ffmpeg ffprobe BUILD_INFO )
+    rm -rf "$stage"
     msg "Archive: $OUT_DIR/$archive ($(du -h "$OUT_DIR/$archive" | cut -f1))"
 }
 

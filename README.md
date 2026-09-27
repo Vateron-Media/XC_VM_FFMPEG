@@ -100,11 +100,40 @@ FORCE=1 make ubuntu_20         # rebuild even if the asset exists
 The build matrix lives in **`build_ffmpeg_all.sh`** (bash arrays — the source of
 truth). `versions.json` mirrors it for humans/CI; keep the two in sync.
 
+## Testing
+
+Every build **self-tests before it is packaged**: `build_ffmpeg.sh` runs
+`test-ffmpeg.sh` inside the distro container, so the binary is checked on the
+exact glibc it was built for. Any failure aborts the build and no archive is
+produced — a broken ffmpeg never reaches a release.
+
+`test-ffmpeg.sh` asserts (version-aware for 4.0 / 7.1 / 8.1):
+
+- **runs** — `ffmpeg`/`ffprobe -version` exit 0 (the glibc guarantee)
+- **self-contained** — no non-glibc dynamic deps (`readelf -d`)
+- **codecs** — encoders (x264/x265/aac/ac3/eac3/mp3lame, fdk soft), decoders
+  (dca/DTS, ac3/eac3, h264/hevc), muxers (hls/segment/mpegts/flv/mp4), protocols
+  (file/http/https/rtmp/udp), `--enable-librtmp`
+- **GPU** — `h264_nvenc`/`hevc_nvenc` + `h264_cuvid`/`hevc_cuvid` compiled in
+  (`av1_nvenc` soft on 8.x); `libharfbuzz`/`libfribidi` only on ≥5, forbidden on 4.x
+- **functional** — real transcodes: lavfi → segment muxer (mpegts, ≥2 segments),
+  HLS muxer, ac3 encode+remux roundtrip; ffprobe reads the output back
+
+Run it standalone against a built archive or an extracted dir (host glibc must
+match the archive's distro):
+
+```bash
+./test-ffmpeg.sh out/ffmpeg_7.1_ubuntu_20.tar.gz
+make test ASSET=out/ffmpeg_8.1_ubuntu_22.tar.gz
+FF=/home/xc_vm/bin/ffmpeg_bin/7.1/ffmpeg FP=.../ffprobe FF_LABEL=7.1 ./test-ffmpeg.sh
+```
+
 ## Files
 
 | Path | Role |
 |------|------|
-| `build_ffmpeg.sh` | the actual builder — one distro per run (env: `V_FFMPEG`, `FF_LABEL`, `FF_DISTRO`, `OUT_DIR`). Compiles every codec static, verifies the result is self-contained (only glibc/libgcc dynamic). |
+| `build_ffmpeg.sh` | the actual builder — one distro per run (env: `V_FFMPEG`, `FF_LABEL`, `FF_DISTRO`, `OUT_DIR`). Compiles every codec static, verifies the result is self-contained (only glibc/libgcc dynamic), self-tests before packaging. |
+| `test-ffmpeg.sh` | pre-publish test battery — codecs/GPU/functional; run in-container at build time and standalone in CI/manual. |
 | `build_ffmpeg_all.sh` | matrix driver: builds the per-distro image, runs the builder per version, writes flat assets + `hashes.md5`. |
 | `docker/Dockerfile` | one Dockerfile, distro selected via `--build-arg BASE_IMAGE=…`. |
 | `versions.json` | matrix mirror. |

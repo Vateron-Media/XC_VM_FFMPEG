@@ -11,9 +11,11 @@ FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /build
 
-# Build script (installs its own apt build-deps and compiles every codec from source).
+# Build script (installs its own apt build-deps and compiles every codec from source)
+# + the self-test battery it runs before packaging.
 COPY build_ffmpeg.sh /build/build_ffmpeg.sh
-RUN chmod +x /build/build_ffmpeg.sh
+COPY test-ffmpeg.sh  /build/test-ffmpeg.sh
+RUN chmod +x /build/build_ffmpeg.sh /build/test-ffmpeg.sh
 
 # The script writes ffmpeg/ffprobe/ffmpeg_<label>_<distro>.tar.gz here; mount host out/.
 ENV OUT_DIR=/out
