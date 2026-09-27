@@ -8,9 +8,9 @@
 # aborts the build so a broken artifact is never packaged.
 #
 # Usage:
-#   ./test-ffmpeg.sh <dir>                 # dir containing ffmpeg + ffprobe
-#   ./test-ffmpeg.sh <archive.tar.gz>      # extracts, then tests
-#   FF=/path/ffmpeg FP=/path/ffprobe FF_LABEL=7.1 ./test-ffmpeg.sh
+#   ./builds/test-ffmpeg.sh <dir>                 # dir containing ffmpeg + ffprobe
+#   ./builds/test-ffmpeg.sh <archive.tar.gz>      # extracts, then tests
+#   FF=/path/ffmpeg FP=/path/ffprobe FF_LABEL=7.1 ./builds/test-ffmpeg.sh
 #
 # The panel bucket label (4.0 | 7.1 | 8.1) gates version-specific expectations.
 # Taken from $FF_LABEL, else the archive/dir BUILD_INFO, else inferred.

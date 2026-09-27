@@ -91,7 +91,7 @@ Chosen from what XC_VM code **actually invokes** (grep of `StreamProcess` /
 ```bash
 make build                     # full matrix → out/ffmpeg_*.tar.gz + out/hashes.md5
 make ubuntu_20                 # all versions for one distro
-./build_ffmpeg_all.sh ubuntu_20 8.1   # a single (distro, version) pair
+./builds/build_ffmpeg_all.sh ubuntu_20 8.1   # a single (distro, version) pair
 make matrix                    # print the CI matrix JSON
 make check                     # list built assets + hashes
 FORCE=1 make ubuntu_20         # rebuild even if the asset exists
@@ -123,18 +123,18 @@ Run it standalone against a built archive or an extracted dir (host glibc must
 match the archive's distro):
 
 ```bash
-./test-ffmpeg.sh out/ffmpeg_7.1_ubuntu_20.tar.gz
+./builds/test-ffmpeg.sh out/ffmpeg_7.1_ubuntu_20.tar.gz
 make test ASSET=out/ffmpeg_8.1_ubuntu_22.tar.gz
-FF=/home/xc_vm/bin/ffmpeg_bin/7.1/ffmpeg FP=.../ffprobe FF_LABEL=7.1 ./test-ffmpeg.sh
+FF=/home/xc_vm/bin/ffmpeg_bin/7.1/ffmpeg FP=.../ffprobe FF_LABEL=7.1 ./builds/test-ffmpeg.sh
 ```
 
 ## Files
 
 | Path | Role |
 |------|------|
-| `build_ffmpeg.sh` | the actual builder — one distro per run (env: `V_FFMPEG`, `FF_LABEL`, `FF_DISTRO`, `OUT_DIR`). Compiles every codec static, verifies the result is self-contained (only glibc/libgcc dynamic), self-tests before packaging. |
-| `test-ffmpeg.sh` | pre-publish test battery — codecs/GPU/functional; run in-container at build time and standalone in CI/manual. |
-| `build_ffmpeg_all.sh` | matrix driver: builds the per-distro image, runs the builder per version, writes flat assets + `hashes.md5`. |
+| `builds/build_ffmpeg.sh` | the actual builder — one distro per run (env: `V_FFMPEG`, `FF_LABEL`, `FF_DISTRO`, `OUT_DIR`). Compiles every codec static, verifies the result is self-contained (only glibc/libgcc dynamic), self-tests before packaging. |
+| `builds/test-ffmpeg.sh` | pre-publish test battery — codecs/GPU/functional; run in-container at build time and standalone in CI/manual. |
+| `builds/build_ffmpeg_all.sh` | matrix driver: builds the per-distro image, runs the builder per version, writes flat assets + `hashes.md5`. |
 | `docker/Dockerfile` | one Dockerfile, distro selected via `--build-arg BASE_IMAGE=…`. |
 | `versions.json` | matrix mirror. |
 | `Makefile` | wrapper over the driver. |

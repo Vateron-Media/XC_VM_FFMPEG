@@ -28,7 +28,7 @@ jobs:
       - id: gen
         run: |
           set -euo pipefail
-          json="$(./build_ffmpeg_all.sh --print-matrix)"
+          json="$(./builds/build_ffmpeg_all.sh --print-matrix)"
           echo "include=$(echo "$json" | jq -c '.include')" >> "$GITHUB_OUTPUT"
 
   # ── One job per (distro × version): build inside the distro's own container. ──

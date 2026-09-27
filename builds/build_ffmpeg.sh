@@ -77,7 +77,7 @@ DEPS_PREFIX="/opt/ffmpeg_deps"          # static libs land here
 FF_PREFIX="/opt/ffmpeg_build"           # ffmpeg install prefix
 SRC_DIR="/tmp/ffmpeg_src"               # extracted sources
 DL_DIR="/tmp/ffmpeg_dl"                 # downloaded archives (cache)
-OUT_DIR="${OUT_DIR:-$(cd "$(dirname "$0")" && pwd)/out}"
+OUT_DIR="${OUT_DIR:-$(cd "$(dirname "$0")/.." && pwd)/out}"
 NPROC="$(nproc)"
 JOBS="-j${NPROC}"
 
@@ -583,7 +583,7 @@ case "${1:-}" in
     -h|--help)
         echo "Usage: OUT_DIR=/path $0"
         echo "Builds a fully static (glibc-dynamic only) FFmpeg ${V_FFMPEG} with all codecs baked in."
-        echo "Run as root, ideally inside the Debian 11 container (./build_all.sh ffmpeg)."
+        echo "Run as root, ideally inside the per-distro container (./builds/build_ffmpeg_all.sh)."
         exit 0 ;;
     *) main ;;
 esac

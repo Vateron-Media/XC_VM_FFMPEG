@@ -14,15 +14,15 @@ set -euo pipefail
 # the node has 2.31").
 #
 # Usage:
-#   ./build_ffmpeg_all.sh                     # full matrix, then hashes.md5
-#   ./build_ffmpeg_all.sh ubuntu_20           # all versions for one distro
-#   ./build_ffmpeg_all.sh ubuntu_20 8.1       # a single (distro, version) pair
-#   ./build_ffmpeg_all.sh hashes              # (re)generate out/hashes.md5 only
-#   ./build_ffmpeg_all.sh --print-matrix      # emit the CI matrix as JSON
-#   FORCE=1 ./build_ffmpeg_all.sh ...         # rebuild even if the asset exists
+#   ./builds/build_ffmpeg_all.sh                     # full matrix, then hashes.md5
+#   ./builds/build_ffmpeg_all.sh ubuntu_20           # all versions for one distro
+#   ./builds/build_ffmpeg_all.sh ubuntu_20 8.1       # a single (distro, version) pair
+#   ./builds/build_ffmpeg_all.sh hashes              # (re)generate out/hashes.md5 only
+#   ./builds/build_ffmpeg_all.sh --print-matrix      # emit the CI matrix as JSON
+#   FORCE=1 ./builds/build_ffmpeg_all.sh ...         # rebuild even if the asset exists
 # ──────────────────────────────────────────────────────────────────────────────
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"   # scripts live in builds/
 OUT_DIR="${OUT_DIR:-$ROOT_DIR/out}"
 LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 DOCKERFILE="$ROOT_DIR/docker/Dockerfile"

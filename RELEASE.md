@@ -15,7 +15,7 @@ guards against it.
    - **version_tag** — the release tag (bare semver, e.g. `1.0.0`).
    - **draft** — leave checked to review before publishing; uncheck to release
      immediately.
-3. The workflow derives the matrix from `build_ffmpeg_all.sh --print-matrix`,
+3. The workflow derives the matrix from `builds/build_ffmpeg_all.sh --print-matrix`,
    builds every `(version × distro)` pair in parallel (each is a full from-source
    compile — expect a long run), then creates the release with all
    `ffmpeg_*.tar.gz` assets plus `hashes.md5`.
@@ -38,8 +38,8 @@ gh release create 1.0.0 \
 Rebuild a single target without redoing the whole matrix:
 
 ```bash
-FORCE=1 ./build_ffmpeg_all.sh ubuntu_20 8.1
-./build_ffmpeg_all.sh hashes        # regenerate hashes.md5 over out/
+FORCE=1 ./builds/build_ffmpeg_all.sh ubuntu_20 8.1
+./builds/build_ffmpeg_all.sh hashes        # regenerate hashes.md5 over out/
 ```
 
 ## Notes

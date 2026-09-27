@@ -3,7 +3,7 @@
 
 SHELL   := /bin/bash
 OUT_DIR ?= out
-DRIVER  := ./build_ffmpeg_all.sh
+DRIVER  := ./builds/build_ffmpeg_all.sh
 
 DISTROS := debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
 
@@ -40,7 +40,7 @@ matrix:
 
 test:
 	@test -n "$(ASSET)" || { echo "usage: make test ASSET=$(OUT_DIR)/ffmpeg_7.1_ubuntu_20.tar.gz  (host glibc must match the archive's distro)"; exit 2; }
-	./test-ffmpeg.sh "$(ASSET)"
+	./builds/test-ffmpeg.sh "$(ASSET)"
 
 check:
 	@ls -lh $(OUT_DIR)/ffmpeg_*.tar.gz 2>/dev/null || echo "no assets in $(OUT_DIR)/"
