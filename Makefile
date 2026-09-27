@@ -7,7 +7,7 @@ DRIVER  := ./builds/build_ffmpeg_all.sh
 
 DISTROS := debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
 
-.PHONY: all build hashes matrix clean clean-cache clean-ccache check test help $(DISTROS)
+.PHONY: build hashes matrix clean clean-cache clean-ccache check test help $(DISTROS)
 
 help:
 	@echo "XC_VM_FFMPEG targets:"
@@ -24,8 +24,6 @@ help:
 	@echo "  NO_CACHE=1 make .. - disable codec cache + ccache (a truly clean build)"
 	@echo "  (source archives are reused from downloads/ by every distro; codec deps are cached per distro in .cache/;"
 	@echo "   every build self-tests before packaging)"
-
-all: build
 
 build:
 	OUT_DIR=$(OUT_DIR) $(DRIVER) all
