@@ -46,6 +46,9 @@ V_FRIBIDI="1.0.16"
 V_HARFBUZZ="10.2.0"
 V_FONTCONFIG="2.16.0"
 V_LIBASS="0.17.3"
+# apt's nasm on older distros (e.g. ubuntu 20.04 → 2.14.02) can't parse FFmpeg
+# 8.x's x86inc.asm (ALLOC_STACK macro syntax) — build a known-good one instead.
+V_NASM="2.16.01"
 V_X265="4.1"
 V_VPX="1.15.0"
 V_AOM="3.11.0"           # git tag
@@ -116,7 +119,10 @@ fetch() {
     local arch="$DL_DIR/$fname"
     dl "$arch" "$@"
     local top
-    top="$(tar tf "$arch" 2>/dev/null | head -1 | cut -d/ -f1)"
+    # `head -1` closes the pipe early → tar gets SIGPIPE (141) → under pipefail+set -e
+    # this standalone assignment would silently kill the script. `|| true` neutralises
+    # the false failure; the guard below still catches a genuinely empty result.
+    top="$(tar tf "$arch" 2>/dev/null | head -1 | cut -d/ -f1)" || true
     [[ -n "$top" ]] || die "cannot determine top dir of $fname"
     rm -rf "${SRC_DIR:?}/$top"
     tar xf "$arch" -C "$SRC_DIR"
@@ -190,6 +196,12 @@ meson_static() {
 }
 
 # ── Dependency builds (order matters: deps before dependents) ──────────────────
+b_nasm() {
+    fetch "nasm-${V_NASM}.tar.xz" \
+        "https://www.nasm.us/pub/nasm/releasebuilds/${V_NASM}/nasm-${V_NASM}.tar.xz"
+    cd "$SRC"; ./configure --prefix="$DEPS_PREFIX"; make $JOBS; make install
+}
+
 b_zlib() {
     fetch "zlib-${V_ZLIB}.tar.gz" \
         "https://zlib.net/zlib-${V_ZLIB}.tar.gz" \
@@ -334,6 +346,7 @@ b_theora() {
 }
 
 build_dependencies() {
+    build nasm       b_nasm
     build zlib       b_zlib
     build bzip2      b_bzip2
     build openssl    b_openssl
@@ -364,6 +377,19 @@ build_ffmpeg() {
     cd "$SRC"
     make distclean 2>/dev/null || true
 
+    # C++ codecs (x265, …) need libstdc++. An explicit "-lstdc++" links it
+    # DYNAMICALLY and defeats -static-libstdc++, leaving a libstdc++.so.6 NEEDED.
+    # Link the static archive by full path so the binary stays self-contained.
+    local libstdcxx_a
+    libstdcxx_a="$(gcc -print-file-name=libstdc++.a)"
+    [[ -f "$libstdcxx_a" ]] || die "libstdc++.a not found ($libstdcxx_a) — install g++/libstdc++-dev"
+
+    # C++ deps (x265, …) list a DYNAMIC "-lstdc++" in their .pc Libs.private, which
+    # `--pkg-config-flags=--static` would inject → a libstdc++.so.6 NEEDED that
+    # defeats the static link. Strip it; libstdc++.a (extra-libs, last on the line)
+    # resolves those C++ symbols statically instead.
+    find "$DEPS_PREFIX" -name '*.pc' -exec sed -i 's/-lstdc++//g' {} + 2>/dev/null || true
+
     # NB: we deliberately do NOT pass -static (would static-link glibc → segfaults
     # in getaddrinfo/NSS). Only our prefix has .a files, so all codecs link static
     # automatically; libstdc++/libgcc are folded in via the -static-* flags. glibc
@@ -372,8 +398,8 @@ build_ffmpeg() {
         --prefix="$FF_PREFIX" \
         --pkg-config-flags=--static \
         --extra-cflags="-I$DEPS_PREFIX/include" \
-        --extra-ldflags="-L$DEPS_PREFIX/lib -L$DEPS_PREFIX/lib64 -static-libgcc -static-libstdc++" \
-        --extra-libs="-lpthread -lm -ldl -lstdc++" \
+        --extra-ldflags="-L$DEPS_PREFIX/lib -L$DEPS_PREFIX/lib64 -static-libgcc" \
+        --extra-libs="-lpthread -lm -ldl $libstdcxx_a" \
         --extra-version="XCVM" \
         --enable-static --disable-shared --enable-pic \
         --disable-debug --disable-doc --disable-ffplay \
@@ -395,7 +421,9 @@ build_ffmpeg() {
 # which exist on every Linux host.
 verify_static() {
     local bin="$1"
-    local allow='^(libc|libm|libdl|libpthread|librt|libresolv|libgcc_s|ld-linux.*|linux-vdso.*)\.so'
+    # libmvec = glibc's vectorised-math lib (part of glibc ≥2.22 → present on every
+    # target distro); allowed like the rest of the glibc family.
+    local allow='^(libc|libm|libmvec|libdl|libpthread|librt|libresolv|libgcc_s|ld-linux.*|linux-vdso.*)\.so'
     step "Verifying $bin has no external library dependencies"
     "$bin" -version >/dev/null 2>&1 || die "$bin does not run"
 

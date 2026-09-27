@@ -54,10 +54,15 @@ step() { echo -e "${CYAN}===${NC} $*"; }
 die()  { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
 
 mkdir -p "$OUT_DIR" "$LOG_DIR"
+# docker -v treats a relative path as a named volume — always mount an absolute one.
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
 # build_image <distro> — build the per-distro image once (reused for every version).
 build_image() {
-    local distro="$1" base="${DISTROS[$distro]}"
+    # NB: separate declarations — `local a=$1 b=${arr[$a]}` expands b before a is
+    # assigned (all args to `local` are expanded first), which trips `set -u`.
+    local distro="$1"
+    local base="${DISTROS[$distro]}"
     [[ -n "$base" ]] || die "unknown distro: $distro"
     local logfile="$LOG_DIR/image_${distro}.log"
     step "IMAGE xcvm-ffmpeg:$distro (base=$base)"
