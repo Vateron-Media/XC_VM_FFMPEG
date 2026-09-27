@@ -5,9 +5,9 @@ SHELL   := /bin/bash
 OUT_DIR ?= out
 DRIVER  := ./build_ffmpeg_all.sh
 
-DISTROS := debian_11 debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
+DISTROS := debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
 
-.PHONY: all build hashes matrix clean check help $(DISTROS)
+.PHONY: all build hashes matrix clean clean-cache check test help $(DISTROS)
 
 help:
 	@echo "XC_VM_FFMPEG targets:"

@@ -60,6 +60,7 @@ jobs:
             -e "V_FFMPEG=${{ matrix.tarball }}" \
             -e "FF_LABEL=${{ matrix.label }}" \
             -e "FF_DISTRO=${{ matrix.distro }}" \
+            -e "V_NVHEADERS=${{ matrix.nvheaders }}" \
             "xcvm-ffmpeg:${{ matrix.distro }}"
 
       - name: Upload asset artifact

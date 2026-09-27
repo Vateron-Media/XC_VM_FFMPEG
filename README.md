@@ -28,17 +28,24 @@ guessing.
 
 ## Build matrix
 
-`(panel version) × (distro)` → one release asset each:
+`(panel version) × (distro)` → one release asset each. All are GPU-enabled:
 
-| Label | FFmpeg tarball | Note |
-|-------|----------------|------|
-| `4.0` | 4.4.5          | legacy DTS-HD bucket (`dts_legacy_ffmpeg`) — see caveat below |
-| `7.1` | 7.1            | |
-| `8.1` | 8.1            | |
+| Label | FFmpeg tarball | nv-codec-headers | Note |
+|-------|----------------|------------------|------|
+| `4.0` | 4.4.5          | n11.1.5.3        | last 4.x; see `-nofix_dts` caveat |
+| `7.1` | 7.1            | n12.2.72.0       | |
+| `8.1` | 8.1            | n12.2.72.0       | |
+
+> **`4.0` and `-nofix_dts`.** The panel's `4.0` bucket historically shipped
+> XUI.one's 2018 binary (`extra-version=XUI10FFMPEG`), which carries a **custom
+> `-nofix_dts` flag that does not exist in stock FFmpeg**. Rebuilding `4.0` from
+> the 4.4.5 tarball gives GPU + native DTS decode (`dca`), but that flag is gone,
+> so the panel must **stop passing `-nofix_dts`** to the `4.0` binary
+> (`StreamProcess` `dts_legacy_ffmpeg` path, ~line 947). DTS audio still decodes
+> natively; only the XUI-specific timestamp quirk is dropped.
 
 | Distro tag  | Base image     | glibc |
 |-------------|----------------|-------|
-| `debian_11` | `debian:11`    | 2.31  |
 | `debian_12` | `debian:12`    | 2.36  |
 | `debian_13` | `debian:13`    | 2.41  |
 | `ubuntu_20` | `ubuntu:20.04` | 2.31  |
@@ -49,6 +56,31 @@ guessing.
 (e.g. `ffmpeg_8.1_ubuntu_20.tar.gz`). Each archive contains `ffmpeg`, `ffprobe`
 and a `BUILD_INFO` file. Every release also ships `hashes.md5` — the panel's
 `GitHubReleases::getAssetHash()` reads it to verify downloads.
+
+## Codec set
+
+Chosen from what XC_VM code **actually invokes** (grep of `StreamProcess` /
+`ProfileService`), not the union of the deployed builds:
+
+- **Video encode:** `libx264`, `libx265`, and **`nvenc` + `cuvid` + `ffnvcodec`**
+  (GPU). The NVIDIA libs are `dlopen`'d at runtime, so enabling them adds no
+  runtime dependency — a CPU-only node just reports no GPU. The GPU transcode
+  path (`*_cuvid`, `hevc_nvenc`, `-hwaccel cuvid`) requires this.
+- **Audio:** native `aac` + `aac_adtstoasc`, `libmp3lame`, `libfdk-aac`,
+  `libopus`, `libvorbis`; **DTS decode** via the native `dca` decoder (built-in,
+  no lib, present in every version incl. the rebuilt 4.0).
+- **GPU:** all three versions are built with `nvenc`/`cuvid`/`ffnvcodec`. Note the
+  currently-deployed 7.1 (mardock's build) has **no** GPU support — this build
+  fixes that. nv-codec-headers is pinned per ffmpeg version (n12 is too new for 4.x).
+- **Subtitles/text:** `libass`, `libfreetype`, `fontconfig`, `libfribidi`,
+  `libharfbuzz`, native `subrip`.
+- **Net/TLS:** `openssl`, `librtmp` (native rtmp already covers `-f flv rtmp://`;
+  librtmp adds rtmpe/rtmps and matches the deployed builds), native
+  http/https/udp/rtp/hls.
+- **Dropped** (no code reference): AV1 (`libaom`/`libdav1d` — also the slowest to
+  build), `libsrt` (the `srt` in code is SubRip subtitles, not the protocol),
+  `libxavs`, `libxvid`, `libwebp`, `libvidstab`, `libopenjpeg`, `libxml2`,
+  `opencore-amr`, `libspeex`, `libbluray`.
 
 > **Rocky Linux is TODO.** `build_ffmpeg.sh` installs its build tools via `apt`.
 > Adding `rocky_9` needs a dnf/yum port of `install_build_tools()`
@@ -82,6 +114,11 @@ truth). `versions.json` mirrors it for humans/CI; keep the two in sync.
 
 ## Caveats
 
+- **`drawtext` filter:** the panel's `xc_fanout` "send message" overlay re-encodes a
+  viewer's segment with the `drawtext` filter, which requires FFmpeg to be built
+  **with libfreetype**. `build_ffmpeg.sh` keeps `--enable-libfreetype` on and its
+  `show_features` report asserts `drawtext` is present — if that line is ✗, do not
+  ship the build for overlay use.
 - **FFmpeg 4.0 (`4.4.5`) uses the modern codec set** (x265 4.1, dav1d 1.5.1,
   aom 3.11…). Some of those APIs are newer than FFmpeg 4.x expects; if a 4.0
   build fails to link, pin older codec versions for that build (a per-version

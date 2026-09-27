@@ -35,9 +35,15 @@ declare -A FFMPEG_VERSIONS=(
     [7.1]="7.1"
     [8.1]="8.1"
 )
+# Panel label -> nv-codec-headers tag (must match the ffmpeg major; n12 is too
+# new for 4.x). Passed to the builder as V_NVHEADERS.
+declare -A NVHEADERS=(
+    [4.0]="n11.1.5.3"
+    [7.1]="n12.2.72.0"
+    [8.1]="n12.2.72.0"
+)
 # Distro tag -> docker base image.
 declare -A DISTROS=(
-    [debian_11]="debian:11"
     [debian_12]="debian:12"
     [debian_13]="debian:13"
     [ubuntu_20]="ubuntu:20.04"
@@ -45,7 +51,7 @@ declare -A DISTROS=(
     [ubuntu_24]="ubuntu:24.04"
 )
 # Deterministic ordering (assoc arrays are unordered).
-DISTRO_ORDER=(debian_11 debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24)
+DISTRO_ORDER=(debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24)
 VERSION_ORDER=(4.0 7.1 8.1)
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -90,6 +96,7 @@ build_pair() {
         -e "V_FFMPEG=$tarball" \
         -e "FF_LABEL=$label" \
         -e "FF_DISTRO=$distro" \
+        -e "V_NVHEADERS=${NVHEADERS[$label]}" \
         "xcvm-ffmpeg:$distro" 2>&1 | tee "$logfile"
     [[ -f "$OUT_DIR/$asset" ]] || die "expected $asset was not produced"
 }
@@ -110,8 +117,8 @@ print_matrix() {
         for v in "${VERSION_ORDER[@]}"; do
             [[ $first -eq 1 ]] || printf ','
             first=0
-            printf '{"distro":"%s","base":"%s","label":"%s","tarball":"%s"}' \
-                "$d" "${DISTROS[$d]}" "$v" "${FFMPEG_VERSIONS[$v]}"
+            printf '{"distro":"%s","base":"%s","label":"%s","tarball":"%s","nvheaders":"%s"}' \
+                "$d" "${DISTROS[$d]}" "$v" "${FFMPEG_VERSIONS[$v]}" "${NVHEADERS[$v]}"
         done
     done
     printf ']}\n'

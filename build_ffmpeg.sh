@@ -51,11 +51,14 @@ V_LIBASS="0.17.3"
 V_NASM="2.16.01"
 V_X265="4.1"
 V_VPX="1.15.0"
-V_AOM="3.11.0"           # git tag
-V_DAV1D="1.5.1"
 V_OPUS="1.5.2"
 V_LAME="3.100"
 V_FDKAAC="2.0.3"
+# nv-codec-headers git tag (nvenc/cuvid). MUST roughly match the FFmpeg version:
+# n12.x fits FFmpeg 7.x/8.x but is too new for 4.x (configure rejects it). The
+# matrix driver sets this per build (4.0 → n11.x). Overridable via env.
+V_NVHEADERS="${V_NVHEADERS:-n12.2.72.0}"
+V_LIBRTMP="master"       # rtmpdump/librtmp — no releases, track master
 V_OGG="1.3.5"
 V_VORBIS="1.3.7"
 V_THEORA="1.1.1"
@@ -291,18 +294,28 @@ b_vpx() {
     make $JOBS; make install
 }
 
-b_aom() {
-    git_fetch "aom" "v${V_AOM}" \
-        "https://aomedia.googlesource.com/aom"
-    cd "$SRC"
-    cmake_static "$SRC" -DENABLE_DOCS=0 -DENABLE_EXAMPLES=0 -DENABLE_TESTS=0 -DENABLE_TOOLS=0 \
-        -DCONFIG_AV1_ENCODER=1 -DCONFIG_AV1_DECODER=1
+# NVIDIA nvenc/cuvid/ffnvcodec: headers only. The actual libnvidia-encode.so /
+# libcuda.so are dlopen'd at RUNTIME, so enabling this adds NO runtime dependency
+# — on a CPU-only node ffmpeg simply reports no GPU. GPU transcode path in
+# StreamProcess (*_cuvid, hevc_nvenc, -hwaccel cuvid) needs this.
+b_nv_codec_headers() {
+    git_fetch "nv-codec-headers" "${V_NVHEADERS}" \
+        "https://github.com/FFmpeg/nv-codec-headers.git"
+    cd "$SRC"; make install PREFIX="$DEPS_PREFIX"
 }
 
-b_dav1d() {
-    fetch "dav1d-${V_DAV1D}.tar.gz" \
-        "https://code.videolan.org/videolan/dav1d/-/archive/${V_DAV1D}/dav1d-${V_DAV1D}.tar.gz"
-    cd "$SRC"; meson_static -Denable_tools=false -Denable_tests=false
+# librtmp (from rtmpdump). FFmpeg has native rtmp already; librtmp adds
+# rtmpe/rtmps and matches the deployed builds. Links against our static openssl.
+b_librtmp() {
+    git_fetch "rtmpdump" "master" \
+        "https://github.com/FFmpeg/rtmpdump.git" \
+        "https://git.ffmpeg.org/rtmpdump.git"
+    cd "$SRC/librtmp"
+    make install SYS=posix prefix="$DEPS_PREFIX" SHARED= CRYPTO=OPENSSL \
+        XCFLAGS="-I$DEPS_PREFIX/include" XLDFLAGS="-L$DEPS_PREFIX/lib"
+    # rtmpdump's install drops a shared lib too; keep only the static .a so the
+    # linker cannot fall back to librtmp.so at runtime.
+    rm -f "$DEPS_PREFIX"/lib/librtmp.so* 2>/dev/null || true
 }
 
 b_opus() {
@@ -359,11 +372,11 @@ build_dependencies() {
     build x264       b_x264
     build x265       b_x265
     build vpx        b_vpx
-    build aom        b_aom
-    build dav1d      b_dav1d
     build opus       b_opus
     build lame       b_lame
     build fdkaac     b_fdkaac
+    build nvheaders  b_nv_codec_headers
+    build librtmp    b_librtmp
     build ogg        b_ogg
     build vorbis     b_vorbis
     build theora     b_theora
@@ -376,6 +389,16 @@ build_ffmpeg() {
         "https://ffmpeg.org/releases/ffmpeg-${V_FFMPEG}.tar.xz"
     cd "$SRC"
     make distclean 2>/dev/null || true
+
+    # ffmpeg-level libfribidi/libharfbuzz options only exist from 6.1+; the 4.x
+    # bucket (XUI's legacy DTS binary) predates them and configure would abort.
+    # libass still links fribidi/harfbuzz internally, so text rendering is intact.
+    local ff_major="${V_FFMPEG%%.*}"
+    local text_shaping="--enable-libfribidi --enable-libharfbuzz"
+    if ! [ "${ff_major:-0}" -ge 5 ] 2>/dev/null; then
+        text_shaping=""
+        warn "FFmpeg ${V_FFMPEG}: omitting ffmpeg-level libfribidi/libharfbuzz (added in 6.1)"
+    fi
 
     # C++ codecs (x265, …) need libstdc++. An explicit "-lstdc++" links it
     # DYNAMICALLY and defeats -static-libstdc++, leaving a libstdc++.so.6 NEEDED.
@@ -405,12 +428,13 @@ build_ffmpeg() {
         --disable-debug --disable-doc --disable-ffplay \
         --enable-gpl --enable-version3 --enable-nonfree \
         --enable-runtime-cpudetect \
-        --enable-openssl \
+        --enable-openssl --enable-librtmp \
+        --enable-nvenc --enable-cuvid --enable-ffnvcodec \
         --enable-zlib --enable-bzlib \
-        --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libdav1d \
+        --enable-libx264 --enable-libx265 --enable-libvpx \
         --enable-libopus --enable-libmp3lame --enable-libfdk-aac \
         --enable-libvorbis --enable-libtheora \
-        --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-fontconfig
+        --enable-libass --enable-libfreetype --enable-fontconfig $text_shaping
     make $JOBS
     make install
 }
@@ -482,20 +506,27 @@ EOF
 
 # ── Summary of enabled features ────────────────────────────────────────────────
 show_features() {
-    local ff="$OUT_DIR/ffmpeg"
+    local ff="$FF_PREFIX/bin/ffmpeg"   # staged copy is gone; use the install prefix
     step "Enabled features"
+    # Config-string flags (note: fontconfig's flag is --enable-fontconfig, not lib-).
     local f
-    for f in libx264 libx265 libvpx libaom libdav1d libopus libmp3lame libfdk-aac \
-             libvorbis libtheora libass libfreetype libfontconfig libharfbuzz; do
-        if "$ff" -version 2>/dev/null | grep -q -- "--enable-$f"; then
+    for f in libx264 libx265 libvpx librtmp libopus libmp3lame libfdk-aac \
+             libvorbis libtheora libass libfreetype fontconfig libharfbuzz \
+             nvenc cuvid ffnvcodec; do
+        if "$ff" -hide_banner -version 2>/dev/null | grep -q -- "--enable-$f"; then
             echo -e "   ${GREEN}✓${NC} $f"
         else
             echo -e "   ${RED}✗${NC} $f"
         fi
     done
-    echo -e "   HLS demux/mux : $("$ff" -formats 2>/dev/null | grep -q ' hls' && echo "✓" || echo "✗")"
-    echo -e "   DASH demux/mux: $("$ff" -formats 2>/dev/null | grep -q ' dash' && echo "✓" || echo "✗")"
-    echo -e "   TLS (https)   : $("$ff" -protocols 2>/dev/null | grep -q 'https' && echo "✓" || echo "✗")"
+    # Actual capability listings — match the name as a whole column token.
+    feat() { "$ff" -hide_banner "$1" 2>/dev/null | grep -qE "(^| )$2( |,|\$)" && echo "✓" || echo "✗"; }
+    echo -e "   HLS muxer     : $(feat -muxers hls)"
+    echo -e "   segment muxer : $(feat -muxers segment)"
+    echo -e "   MPEG-TS muxer : $(feat -muxers mpegts)"
+    echo -e "   DTS decode    : $(feat -decoders dca)"
+    echo -e "   RTMP protocol : $("$ff" -hide_banner -protocols 2>/dev/null | grep -qw rtmp && echo "✓" || echo "✗")"
+    echo -e "   TLS (https)   : $("$ff" -hide_banner -protocols 2>/dev/null | grep -qw https && echo "✓" || echo "✗")"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────

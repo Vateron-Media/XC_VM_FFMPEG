@@ -2,10 +2,10 @@
 #
 # The base image IS the target distro, so the resulting binary links against that
 # distro's glibc and is guaranteed to run on nodes of the same distro:
-#     --build-arg BASE_IMAGE=debian:11
+#     --build-arg BASE_IMAGE=debian:12
 #     --build-arg BASE_IMAGE=ubuntu:20.04   ...etc
 # One Dockerfile, image selected per build (mirrors the panel's distro bundles).
-ARG BASE_IMAGE=debian:11
+ARG BASE_IMAGE=debian:12
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
