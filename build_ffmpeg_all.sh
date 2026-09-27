@@ -28,10 +28,22 @@ LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 DOCKERFILE="$ROOT_DIR/docker/Dockerfile"
 FORCE="${FORCE:-0}"
 
+# Per-distro build cache: codec deps (/opt/ffmpeg_deps) and downloads (/tmp/ffmpeg_dl)
+# are identical across the ffmpeg versions of ONE distro (same container/glibc), so we
+# mount a distro-keyed cache — the ~19 codecs compile once per distro, then 7.1/8.1
+# reuse them (only ffmpeg itself rebuilds). NEVER shared between distros (ABI/glibc).
+# Disable with NO_CACHE=1. Cache files are root-owned (docker) → `make clean-cache`.
+CACHE_DIR="${CACHE_DIR:-$ROOT_DIR/.cache}"
+USE_CACHE=1; [[ -n "${NO_CACHE:-}" ]] && USE_CACHE=0
+
 # ── Build matrix — single source of truth (versions.json mirrors this) ─────────
 # Panel label -> ffmpeg release tarball version.
+# The "4.0" bucket is rebuilt from FFmpeg 4.4.5 (last 4.x) with GPU enabled and
+# native DTS decode. Caveat: the XUI custom "-nofix_dts" flag does NOT exist in
+# stock ffmpeg, so the panel must stop sending it to the 4.0 binary
+# (StreamProcess dts_legacy_ffmpeg path) — native `dca` decode still works.
 declare -A FFMPEG_VERSIONS=(
-    [4.0]="4.4.5"   # legacy DTS-HD bucket — see README caveat (modern codec set)
+    [4.0]="4.4.5"
     [7.1]="7.1"
     [8.1]="8.1"
 )
@@ -90,9 +102,20 @@ build_pair() {
         return 0
     fi
     local logfile="$LOG_DIR/${distro}_${label}.log"
-    step "BUILD $asset (ffmpeg $tarball on ${DISTROS[$distro]})"
+
+    # Distro-keyed cache mounts (shared by that distro's ffmpeg versions).
+    local cache_args=() ctag=""
+    if [[ "$USE_CACHE" == 1 ]]; then
+        local cdeps="$CACHE_DIR/$distro/deps" cdl="$CACHE_DIR/$distro/dl"
+        mkdir -p "$cdeps" "$cdl"
+        cache_args=(-v "$cdeps:/opt/ffmpeg_deps" -v "$cdl:/tmp/ffmpeg_dl")
+        ctag=", cached"
+    fi
+
+    step "BUILD $asset (ffmpeg $tarball on ${DISTROS[$distro]}${ctag})"
     docker run --rm \
         -v "$OUT_DIR:/out" \
+        "${cache_args[@]}" \
         -e "V_FFMPEG=$tarball" \
         -e "FF_LABEL=$label" \
         -e "FF_DISTRO=$distro" \

@@ -39,3 +39,6 @@ check:
 
 clean:
 	rm -rf $(OUT_DIR) logs
+
+clean-cache:
+	@rm -rf .cache 2>/dev/null || { echo "cache is root-owned (docker) — run: sudo rm -rf .cache"; exit 1; }
