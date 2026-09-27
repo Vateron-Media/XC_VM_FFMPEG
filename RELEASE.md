@@ -5,41 +5,37 @@ are named `ffmpeg_<label>_<distro>.tar.gz` and accompanied by `hashes.md5`, whic
 the panel reads (`GitHubReleases::getAssetHash`) to verify downloads.
 
 Tags are **bare semver** — `1.0.0`, not `v1.0.0`. The panel's
-`GitHubReleases::isValidVersion()` rejects a `v` prefix, and the CI workflow
-guards against it.
+`GitHubReleases::isValidVersion()` rejects a `v` prefix, and `make release`
+refuses one.
 
-## Option A — GitHub Actions (recommended)
+Assets are **built on the PC, not in GitHub Actions** — a full matrix is hours of
+CPU per release, which the shared GitHub runners can't spare. GitHub only hosts
+the result.
 
-1. Go to **Actions → Build & Release FFmpeg → Run workflow**.
-2. Fill in:
-   - **version_tag** — the release tag (bare semver, e.g. `1.0.0`).
-   - **draft** — leave checked to review before publishing; uncheck to release
-     immediately.
-3. The workflow derives the matrix from `builds/build_ffmpeg_all.sh --print-matrix`,
-   builds every `(version × distro)` pair in parallel (each is a full from-source
-   compile — expect a long run), then creates the release with all
-   `ffmpeg_*.tar.gz` assets plus `hashes.md5`.
-4. If you left it as a draft, review the assets and **publish** the release.
+## Cutting a release
 
-## Option B — Local build + manual upload
-
-Requires Docker.
+Requires Docker and an authenticated [`gh`](https://cli.github.com) (`gh auth login`).
 
 ```bash
-make build                 # builds out/ffmpeg_*.tar.gz + out/hashes.md5
-make check                 # sanity-check the asset list and hashes
-
-gh release create 1.0.0 \
-  --title "FFmpeg 1.0.0" \
-  --notes "Per-distro static FFmpeg builds." \
-  out/ffmpeg_*.tar.gz out/hashes.md5
+make build                 # builds every out/ffmpeg_<label>_<distro>.tar.gz
+make check                 # sanity-check the asset list
+make release TAG=1.0.0     # draft release: all matrix assets + hashes.md5
 ```
+
+`make release`:
+
+- refuses a tag that is not bare semver;
+- refuses a **partial matrix** — every `(version × distro)` asset must exist in
+  `out/` (it lists the missing ones);
+- uploads exactly the matrix assets (stray files in `out/` stay local) plus a
+  freshly generated `hashes.md5` over them;
+- creates a **draft** — review the assets on GitHub, then publish. `DRAFT=0 make
+  release TAG=…` publishes immediately.
 
 Rebuild a single target without redoing the whole matrix:
 
 ```bash
 FORCE=1 ./builds/build_ffmpeg_all.sh ubuntu_20 8.1
-./builds/build_ffmpeg_all.sh hashes        # regenerate hashes.md5 over out/
 ```
 
 ## Notes

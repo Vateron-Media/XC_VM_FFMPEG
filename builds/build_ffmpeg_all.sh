@@ -18,7 +18,7 @@ set -euo pipefail
 #   ./builds/build_ffmpeg_all.sh ubuntu_20           # all versions for one distro
 #   ./builds/build_ffmpeg_all.sh ubuntu_20 8.1       # a single (distro, version) pair
 #   ./builds/build_ffmpeg_all.sh hashes              # (re)generate out/hashes.md5 only
-#   ./builds/build_ffmpeg_all.sh --print-matrix      # emit the CI matrix as JSON
+#   ./builds/build_ffmpeg_all.sh release 1.0.0       # publish out/ as a GitHub release (DRAFT=0 → public)
 #   FORCE=1 ./builds/build_ffmpeg_all.sh ...         # rebuild even if the asset exists
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -137,26 +137,36 @@ gen_hashes() {
     msg "hashes.md5:"; cat "$OUT_DIR/hashes.md5"
 }
 
-# print_matrix — GitHub Actions matrix (one job per distro×version pair).
-print_matrix() {
-    local first=1
-    printf '{"include":['
-    local d v
+# release <tag> — publish the locally built matrix as a GitHub release (assets are
+# built on this PC, never in CI). Refuses a partial matrix; uploads exactly the
+# matrix assets (stray files in out/ stay local) + a hashes.md5 over them.
+release() {
+    local tag="${1:-}" d v assets=() missing=()
+    [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+        || die "tag must be bare semver, e.g. 1.0.0 — the panel rejects a 'v' prefix (got: '${tag}')"
     for d in "${DISTRO_ORDER[@]}"; do
         for v in "${VERSION_ORDER[@]}"; do
-            [[ $first -eq 1 ]] || printf ','
-            first=0
-            printf '{"distro":"%s","base":"%s","label":"%s","tarball":"%s","nvheaders":"%s"}' \
-                "$d" "${DISTROS[$d]}" "$v" "${FFMPEG_VERSIONS[$v]}" "${NVHEADERS[$v]}"
+            assets+=("ffmpeg_${v}_${d}.tar.gz")
+            [[ -f "$OUT_DIR/ffmpeg_${v}_${d}.tar.gz" ]] || missing+=("ffmpeg_${v}_${d}.tar.gz")
         done
     done
-    printf ']}\n'
+    (( ${#missing[@]} == 0 )) || die "matrix incomplete, missing: ${missing[*]} (run: make build)"
+    command -v gh >/dev/null 2>&1 || die "gh CLI not found (https://cli.github.com)"
+
+    ( cd "$OUT_DIR" && md5sum "${assets[@]}" > hashes.md5 )
+    msg "hashes.md5:"; cat "$OUT_DIR/hashes.md5"
+    local draft=(--draft); [[ "${DRAFT:-1}" == 0 ]] && draft=()
+    step "Creating release $tag (${draft[*]:-public}) with ${#assets[@]} assets"
+    ( cd "$OUT_DIR" && gh release create "$tag" "${draft[@]}" \
+        --title "FFmpeg $tag" \
+        --notes "Per-distro static FFmpeg builds. Each asset is ffmpeg_<label>_<distro>.tar.gz (ffmpeg+ffprobe, codecs static, glibc matched to the distro). Verify with hashes.md5." \
+        "${assets[@]}" hashes.md5 )
 }
 
 build_distro() { local d="$1" v; build_image "$d"; for v in "${VERSION_ORDER[@]}"; do build_pair "$d" "$v"; done; }
 
 case "${1:-all}" in
-    --print-matrix) print_matrix ;;
+    release)        release "${2:-}" ;;
     hashes)         gen_hashes ;;
     all|"")
         for d in "${DISTRO_ORDER[@]}"; do build_distro "$d"; done

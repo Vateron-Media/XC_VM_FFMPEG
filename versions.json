@@ -1,5 +1,5 @@
 {
-  "_comment": "Build matrix for XC_VM_FFMPEG. Source of truth for local builds is the bash arrays in build_ffmpeg_all.sh; this file mirrors them for humans/CI. Keep in sync.",
+  "_comment": "Build matrix for XC_VM_FFMPEG. Source of truth for local builds is the bash arrays in build_ffmpeg_all.sh; this file mirrors them for humans. Keep in sync.",
 
   "ffmpeg_versions": {
     "_comment": "panel label -> ffmpeg release tarball to compile per-distro (all GPU-enabled). 4.0 rebuilt from 4.4.5; the XUI '-nofix_dts' custom flag is absent from stock ffmpeg (native dca decode still works) — panel must stop sending it.",

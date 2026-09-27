@@ -7,14 +7,14 @@ DRIVER  := ./builds/build_ffmpeg_all.sh
 
 DISTROS := debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
 
-.PHONY: build hashes matrix clean clean-cache clean-ccache check test help $(DISTROS)
+.PHONY: build hashes release clean clean-cache clean-ccache check test help $(DISTROS)
 
 help:
 	@echo "XC_VM_FFMPEG targets:"
 	@echo "  make build         - build the full (version x distro) matrix + hashes.md5"
 	@echo "  make <distro>      - build all versions for one distro ($(DISTROS))"
 	@echo "  make hashes        - (re)generate $(OUT_DIR)/hashes.md5"
-	@echo "  make matrix        - print the CI matrix JSON"
+	@echo "  make release TAG=1.0.0 - publish out/ as a draft GitHub release (DRAFT=0 to publish now)"
 	@echo "  make test ASSET=.. - run test-ffmpeg.sh on one built archive (host glibc must match)"
 	@echo "  make check         - list built assets"
 	@echo "  make clean         - remove $(OUT_DIR)/ and logs/"
@@ -34,8 +34,8 @@ $(DISTROS):
 hashes:
 	OUT_DIR=$(OUT_DIR) $(DRIVER) hashes
 
-matrix:
-	@$(DRIVER) --print-matrix
+release:
+	OUT_DIR=$(OUT_DIR) $(DRIVER) release $(TAG)
 
 test:
 	@test -n "$(ASSET)" || { echo "usage: make test ASSET=$(OUT_DIR)/ffmpeg_7.1_ubuntu_20.tar.gz  (host glibc must match the archive's distro)"; exit 2; }
