@@ -106,13 +106,15 @@ build_pair() {
     fi
     local logfile="$LOG_DIR/${distro}_${label}.log"
 
-    # Shared downloads + distro-keyed deps cache (shared by that distro's ffmpeg versions).
+    # Shared downloads + distro-keyed deps cache (shared by that distro's ffmpeg versions)
+    # + one ccache for all distros (its key includes the compiler, so distros never mix).
     mkdir -p "$DL_CACHE"
     local cache_args=(-v "$DL_CACHE:/tmp/ffmpeg_dl") ctag=""
     if [[ "$USE_CACHE" == 1 ]]; then
         local cdeps="$CACHE_DIR/$distro/deps"
-        mkdir -p "$cdeps"
-        cache_args+=(-v "$cdeps:/opt/ffmpeg_deps")
+        mkdir -p "$cdeps" "$CACHE_DIR/ccache"
+        cache_args+=(-v "$cdeps:/opt/ffmpeg_deps"
+                     -v "$CACHE_DIR/ccache:/ccache" -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=10G)
         ctag=", cached"
     fi
 

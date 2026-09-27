@@ -89,7 +89,10 @@ warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 die()  { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
 
 # ── Build environment: make every tool prefer our static prefix ────────────────
-export PATH="$DEPS_PREFIX/bin:$PATH"
+# /usr/lib/ccache holds gcc/cc/g++ wrappers → every build system (autotools, cmake,
+# meson, ffmpeg configure) compiles through ccache. The driver mounts a persistent
+# CCACHE_DIR, so a rebuild of an already-compiled source is mostly cache hits.
+export PATH="$DEPS_PREFIX/bin:/usr/lib/ccache:$PATH"
 export PKG_CONFIG_PATH="$DEPS_PREFIX/lib/pkgconfig:$DEPS_PREFIX/lib64/pkgconfig"
 export CFLAGS="-I$DEPS_PREFIX/include -O2 -fPIC"
 export CXXFLAGS="$CFLAGS"
@@ -566,10 +569,12 @@ main() {
     command -v apt-get >/dev/null 2>&1 || die "this builder targets Debian (apt-get not found)"
 
     install_build_tools
+    ccache -z >/dev/null 2>&1 || true
     build_dependencies
     build_ffmpeg
     package
     show_features
+    step "ccache stats (this build)"; ccache -s 2>/dev/null || true
 
     msg "✅ DONE — portable FFmpeg in $OUT_DIR"
 }

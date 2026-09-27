@@ -14,7 +14,7 @@ apt-get install -y -qq --no-install-recommends \
     build-essential yasm nasm cmake git pkg-config \
     autoconf automake libtool gperf texinfo \
     wget tar xz-utils unzip ca-certificates \
-    python3 python3-pip ninja-build perl
+    python3 python3-pip ninja-build perl ccache
 # Older distros ship an old meson; some recent libs want newer — use a fresh pip one.
 # Newer distros (ubuntu 24, debian 12+) mark the system Python externally-managed
 # (PEP 668), so a plain pip install errors out — fall back to --break-system-packages.

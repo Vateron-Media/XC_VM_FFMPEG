@@ -7,7 +7,7 @@ DRIVER  := ./builds/build_ffmpeg_all.sh
 
 DISTROS := debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24
 
-.PHONY: all build hashes matrix clean clean-cache check test help $(DISTROS)
+.PHONY: all build hashes matrix clean clean-cache clean-ccache check test help $(DISTROS)
 
 help:
 	@echo "XC_VM_FFMPEG targets:"
@@ -18,9 +18,10 @@ help:
 	@echo "  make test ASSET=.. - run test-ffmpeg.sh on one built archive (host glibc must match)"
 	@echo "  make check         - list built assets"
 	@echo "  make clean         - remove $(OUT_DIR)/ and logs/"
-	@echo "  make clean-cache   - remove the per-distro codec cache (.cache/, root-owned -> sudo)"
+	@echo "  make clean-cache   - remove the per-distro codec cache (keeps .cache/ccache, so the rebuild is fast)"
+	@echo "  make clean-ccache  - remove the compiler cache (.cache/ccache)"
 	@echo "  FORCE=1 make ...   - rebuild even if an asset already exists"
-	@echo "  NO_CACHE=1 make .. - disable the per-distro codec cache (rebuild deps every time)"
+	@echo "  NO_CACHE=1 make .. - disable codec cache + ccache (a truly clean build)"
 	@echo "  (source archives are reused from downloads/ by every distro; codec deps are cached per distro in .cache/;"
 	@echo "   every build self-tests before packaging)"
 
@@ -49,5 +50,9 @@ check:
 clean:
 	rm -rf $(OUT_DIR) logs
 
+# Per-distro codec caches only — .cache/ccache survives, so the next build is mostly cache hits.
 clean-cache:
-	@rm -rf .cache 2>/dev/null || { echo "cache is root-owned (docker) — run: sudo rm -rf .cache"; exit 1; }
+	@rm -rf $(filter-out .cache/ccache,$(wildcard .cache/*)) 2>/dev/null || { echo "cache is root-owned (docker) — run: sudo make clean-cache"; exit 1; }
+
+clean-ccache:
+	@rm -rf .cache/ccache 2>/dev/null || { echo "cache is root-owned (docker) — run: sudo make clean-ccache"; exit 1; }
