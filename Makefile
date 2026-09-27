@@ -21,7 +21,8 @@ help:
 	@echo "  make clean-cache   - remove the per-distro codec cache (.cache/, root-owned -> sudo)"
 	@echo "  FORCE=1 make ...   - rebuild even if an asset already exists"
 	@echo "  NO_CACHE=1 make .. - disable the per-distro codec cache (rebuild deps every time)"
-	@echo "  (codec deps are cached per distro in .cache/; every build self-tests before packaging)"
+	@echo "  (source archives are reused from downloads/ by every distro; codec deps are cached per distro in .cache/;"
+	@echo "   every build self-tests before packaging)"
 
 all: build
 

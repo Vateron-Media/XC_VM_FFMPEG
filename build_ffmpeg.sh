@@ -99,18 +99,22 @@ mkdir -p "$DEPS_PREFIX" "$FF_PREFIX" "$SRC_DIR" "$DL_DIR" "$OUT_DIR"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 # dl <dest> <url> [mirror...] — download with retries, skip if already cached.
+# Downloads to a hidden temp name + rename, so a parallel build sharing $DL_DIR never
+# sees (or reuses) a half-written archive.
 dl() {
     local out="$1"; shift
     if [[ -f "$out" && "$(stat -c%s "$out" 2>/dev/null || echo 0)" -ge 1024 ]]; then
+        msg "cached $(basename "$out")"
         return 0
     fi
-    local u
+    local u part; part="$(dirname "$out")/.part.$$.$(basename "$out")"
     for u in "$@"; do
         msg "GET $(basename "$out") <- $u"
-        if wget -q --timeout=30 --connect-timeout=15 --tries=2 -O "$out" "$u"; then
+        if wget -q --timeout=30 --connect-timeout=15 --tries=2 -O "$part" "$u"; then
+            mv -f "$part" "$out"
             return 0
         fi
-        rm -f "$out"
+        rm -f "$part"
     done
     die "download failed: $(basename "$out")"
 }
@@ -121,6 +125,15 @@ fetch() {
     local fname="$1"; shift
     local arch="$DL_DIR/$fname"
     dl "$arch" "$@"
+    # Drop superseded archives of the same package + major (ffmpeg-7.1 → ffmpeg-7.1.5,
+    # x265_4.1 → x265_4.2); ffmpeg-4/7/8 differ in major, so all three stay cached.
+    # ponytail: a major bump (harfbuzz 10 → 11) leaves the old archive; rm it by hand.
+    local old
+    for old in "$DL_DIR/${fname%%.*}".*; do
+        [[ -f "$old" && "$old" != "$arch" ]] || continue
+        msg "drop stale $(basename "$old")"
+        rm -f "$old"
+    done
     local top
     # `head -1` closes the pipe early → tar gets SIGPIPE (141) → under pipefail+set -e
     # this standalone assignment would silently kill the script. `|| true` neutralises

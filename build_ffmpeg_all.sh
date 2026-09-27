@@ -28,12 +28,15 @@ LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 DOCKERFILE="$ROOT_DIR/docker/Dockerfile"
 FORCE="${FORCE:-0}"
 
-# Per-distro build cache: codec deps (/opt/ffmpeg_deps) and downloads (/tmp/ffmpeg_dl)
-# are identical across the ffmpeg versions of ONE distro (same container/glibc), so we
-# mount a distro-keyed cache — the ~19 codecs compile once per distro, then 7.1/8.1
-# reuse them (only ffmpeg itself rebuilds). NEVER shared between distros (ABI/glibc).
+# Per-distro build cache: codec deps (/opt/ffmpeg_deps) are identical across the ffmpeg
+# versions of ONE distro (same container/glibc), so we mount a distro-keyed cache — the
+# ~19 codecs compile once per distro, then 7.1/8.1 reuse them (only ffmpeg itself
+# rebuilds). NEVER shared between distros (ABI/glibc).
 # Disable with NO_CACHE=1. Cache files are root-owned (docker) → `make clean-cache`.
 CACHE_DIR="${CACHE_DIR:-$ROOT_DIR/.cache}"
+# Source archives are distro-independent → one project dir, mounted into every build
+# (always, even with NO_CACHE). build_ffmpeg.sh reuses them and drops superseded versions.
+DL_CACHE="${DL_CACHE:-$ROOT_DIR/downloads}"
 USE_CACHE=1; [[ -n "${NO_CACHE:-}" ]] && USE_CACHE=0
 
 # ── Build matrix — single source of truth (versions.json mirrors this) ─────────
@@ -103,12 +106,13 @@ build_pair() {
     fi
     local logfile="$LOG_DIR/${distro}_${label}.log"
 
-    # Distro-keyed cache mounts (shared by that distro's ffmpeg versions).
-    local cache_args=() ctag=""
+    # Shared downloads + distro-keyed deps cache (shared by that distro's ffmpeg versions).
+    mkdir -p "$DL_CACHE"
+    local cache_args=(-v "$DL_CACHE:/tmp/ffmpeg_dl") ctag=""
     if [[ "$USE_CACHE" == 1 ]]; then
-        local cdeps="$CACHE_DIR/$distro/deps" cdl="$CACHE_DIR/$distro/dl"
-        mkdir -p "$cdeps" "$cdl"
-        cache_args=(-v "$cdeps:/opt/ffmpeg_deps" -v "$cdl:/tmp/ffmpeg_dl")
+        local cdeps="$CACHE_DIR/$distro/deps"
+        mkdir -p "$cdeps"
+        cache_args+=(-v "$cdeps:/opt/ffmpeg_deps")
         ctag=", cached"
     fi
 
