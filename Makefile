@@ -15,7 +15,8 @@ help:
 	@echo "  make <distro>      - build all versions for one distro ($(DISTROS))"
 	@echo "  make hashes        - (re)generate $(OUT_DIR)/hashes.md5"
 	@echo "  make release TAG=1.0.0 - publish out/ as a draft GitHub release (DRAFT=0 to publish now)"
-	@echo "  make test ASSET=.. - run test-ffmpeg.sh on one built archive (host glibc must match)"
+	@echo "  make test          - self-test every archive in out/, each in its distro's image (DISTRO=.. for one)"
+	@echo "  make test ASSET=.. - run test-ffmpeg.sh on one archive on this host (host glibc must match)"
 	@echo "  make check         - list built assets"
 	@echo "  make clean         - remove $(OUT_DIR)/ and logs/"
 	@echo "  make clean-cache   - remove the per-distro codec cache (keeps .cache/ccache, so the rebuild is fast)"
@@ -38,8 +39,11 @@ release:
 	OUT_DIR=$(OUT_DIR) $(DRIVER) release $(TAG)
 
 test:
-	@test -n "$(ASSET)" || { echo "usage: make test ASSET=$(OUT_DIR)/ffmpeg_7.1_ubuntu_20.tar.gz  (host glibc must match the archive's distro)"; exit 2; }
+ifdef ASSET
 	./builds/test-ffmpeg.sh "$(ASSET)"
+else
+	OUT_DIR=$(OUT_DIR) $(DRIVER) test $(DISTRO)
+endif
 
 check:
 	@ls -lh $(OUT_DIR)/ffmpeg_*.tar.gz 2>/dev/null || echo "no assets in $(OUT_DIR)/"

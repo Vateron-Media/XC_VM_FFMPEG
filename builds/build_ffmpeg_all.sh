@@ -18,6 +18,7 @@ set -euo pipefail
 #   ./builds/build_ffmpeg_all.sh ubuntu_20           # all versions for one distro
 #   ./builds/build_ffmpeg_all.sh ubuntu_20 8.1       # a single (distro, version) pair
 #   ./builds/build_ffmpeg_all.sh hashes              # (re)generate out/hashes.md5 only
+#   ./builds/build_ffmpeg_all.sh test [distro]       # self-test every built archive in its distro
 #   ./builds/build_ffmpeg_all.sh release 1.0.0       # publish out/ as a GitHub release (DRAFT=0 → public)
 #   FORCE=1 ./builds/build_ffmpeg_all.sh ...         # rebuild even if the asset exists
 # ──────────────────────────────────────────────────────────────────────────────
@@ -163,11 +164,36 @@ release() {
         "${assets[@]}" hashes.md5 )
 }
 
+# test_assets [distro] — run test-ffmpeg.sh on every archive in out/, each inside its
+# own distro's build image: the host glibc can't start them all, and the build image
+# has readelf for the "self-contained" check (a bare base image would skip it).
+test_assets() {
+    local only="${1:-}" d v a failed=() tested=0
+    [[ -z "$only" || -n "${DISTROS[$only]:-}" ]] || die "unknown distro: $only"
+    for d in "${DISTRO_ORDER[@]}"; do
+        [[ -z "$only" || "$only" == "$d" ]] || continue
+        for v in "${VERSION_ORDER[@]}"; do
+            a="ffmpeg_${v}_${d}.tar.gz"
+            [[ -f "$OUT_DIR/$a" ]] || continue
+            docker image inspect "xcvm-ffmpeg:$d" >/dev/null 2>&1 || build_image "$d"
+            step "TEST $a"
+            docker run --rm -v "$OUT_DIR:/out:ro" \
+                -v "$ROOT_DIR/builds/test-ffmpeg.sh:/test-ffmpeg.sh:ro" \
+                --entrypoint /bin/bash "xcvm-ffmpeg:$d" /test-ffmpeg.sh "/out/$a" || failed+=("$a")
+            tested=$((tested + 1))
+        done
+    done
+    (( tested > 0 )) || die "no archives in $OUT_DIR${only:+ for $only}"
+    (( ${#failed[@]} == 0 )) || die "$((tested - ${#failed[@]}))/$tested passed; FAILED: ${failed[*]}"
+    msg "all $tested archives passed"
+}
+
 build_distro() { local d="$1" v; build_image "$d"; for v in "${VERSION_ORDER[@]}"; do build_pair "$d" "$v"; done; }
 
 case "${1:-all}" in
     release)        release "${2:-}" ;;
     hashes)         gen_hashes ;;
+    test)           test_assets "${2:-}" ;;
     all|"")
         for d in "${DISTRO_ORDER[@]}"; do build_distro "$d"; done
         gen_hashes ;;

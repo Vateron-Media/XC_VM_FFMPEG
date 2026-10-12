@@ -119,7 +119,15 @@ produced — a broken ffmpeg never reaches a release.
 - **functional** — real transcodes: lavfi → segment muxer (mpegts, ≥2 segments),
   HLS muxer, ac3 encode+remux roundtrip; ffprobe reads the output back
 
-Run it standalone against a built archive or an extracted dir (host glibc must
+Re-test every built archive, each inside its own distro's build image (the host
+glibc can't start them all):
+
+```bash
+make test                      # every archive in out/
+make test DISTRO=debian_13     # one distro
+```
+
+Or run it standalone against one archive or an extracted dir (host glibc must
 match the archive's distro):
 
 ```bash
