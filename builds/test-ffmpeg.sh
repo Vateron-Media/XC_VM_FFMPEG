@@ -110,7 +110,7 @@ else
 fi
 
 # probe_has <file> <codec> — true if <codec> appears among the file's stream codecs.
-probe_has() { "$FP" -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | tr '\n' ' ' | grep -qw "$2"; }
+probe_has() { "$FP" -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | tr '\n' ' ' | grep -w "$2" >/dev/null; }  # no -q: SIGPIPE + pipefail
 
 # 6) Functional: real transcode → segment muxer (mpegts), then ffprobe reads it back.
 #    -g 25 forces a keyframe every second so 1s segments can actually split.

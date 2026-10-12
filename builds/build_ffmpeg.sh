@@ -546,20 +546,22 @@ show_features() {
     for f in libx264 libx265 libvpx librtmp libopus libmp3lame libfdk-aac \
              libvorbis libtheora libass libfreetype fontconfig libharfbuzz \
              nvenc cuvid ffnvcodec; do
-        if "$ff" -hide_banner -version 2>/dev/null | grep -q -- "--enable-$f"; then
+        if "$ff" -hide_banner -version 2>/dev/null | grep -- "--enable-$f" >/dev/null; then
             echo -e "   ${GREEN}✓${NC} $f"
         else
             echo -e "   ${RED}✗${NC} $f"
         fi
     done
     # Actual capability listings — match the name as a whole column token.
-    feat() { "$ff" -hide_banner "$1" 2>/dev/null | grep -qE "(^| )$2( |,|\$)" && echo "✓" || echo "✗"; }
+    # No `grep -q` on a pipe: it exits at the first match, ffmpeg dies of SIGPIPE and
+    # pipefail turns the hit into ✗ (seen ~1 in 4 for hls, early in the list).
+    feat() { "$ff" -hide_banner "$1" 2>/dev/null | grep -E "(^| )$2( |,|\$)" >/dev/null && echo "✓" || echo "✗"; }
     echo -e "   HLS muxer     : $(feat -muxers hls)"
     echo -e "   segment muxer : $(feat -muxers segment)"
     echo -e "   MPEG-TS muxer : $(feat -muxers mpegts)"
     echo -e "   DTS decode    : $(feat -decoders dca)"
-    echo -e "   RTMP protocol : $("$ff" -hide_banner -protocols 2>/dev/null | grep -qw rtmp && echo "✓" || echo "✗")"
-    echo -e "   TLS (https)   : $("$ff" -hide_banner -protocols 2>/dev/null | grep -qw https && echo "✓" || echo "✗")"
+    echo -e "   RTMP protocol : $("$ff" -hide_banner -protocols 2>/dev/null | grep -w rtmp >/dev/null && echo "✓" || echo "✗")"
+    echo -e "   TLS (https)   : $("$ff" -hide_banner -protocols 2>/dev/null | grep -w https >/dev/null && echo "✓" || echo "✗")"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
