@@ -20,6 +20,7 @@ RUN /build/install_tools.sh && rm -rf /var/lib/apt/lists/*
 # before packaging.
 COPY builds/build_ffmpeg.sh /build/build_ffmpeg.sh
 COPY builds/test-ffmpeg.sh  /build/test-ffmpeg.sh
+COPY builds/patches/        /build/patches/
 RUN chmod +x /build/build_ffmpeg.sh /build/test-ffmpeg.sh
 
 # The script writes ffmpeg/ffprobe/ffmpeg_<label>_<distro>.tar.gz here; mount host out/.

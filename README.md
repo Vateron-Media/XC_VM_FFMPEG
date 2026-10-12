@@ -28,21 +28,27 @@ guessing.
 
 ## Build matrix
 
-`(panel version) × (distro)` → one release asset each. All are GPU-enabled:
+`(label) × (distro)` → one release asset each. A label is the build's real
+`<major>.<minor>` — the names the panel fetches (`FfmpegBuildsCommand::LABELS`).
+All are GPU-enabled:
 
 | Label | FFmpeg tarball | nv-codec-headers | Note |
 |-------|----------------|------------------|------|
-| `4.0` | 4.4.5          | n11.1.5.3        | last 4.x; see `-nofix_dts` caveat |
-| `7.1` | 7.1            | n12.2.72.0       | |
+| `4.4` | 4.4.5          | n11.1.5.3        | last 4.x; replaces XUI's `4.0`, see `-nofix_dts` |
+| `7.1` | 7.1.5          | n12.2.72.0       | |
 | `8.1` | 8.1            | n12.2.72.0       | |
 
-> **`4.0` and `-nofix_dts`.** The panel's `4.0` bucket historically shipped
+> **`4.4` and `-nofix_dts`.** The panel's `4.0` bucket historically shipped
 > XUI.one's 2018 binary (`extra-version=XUI10FFMPEG`), which carries a **custom
-> `-nofix_dts` flag that does not exist in stock FFmpeg**. Rebuilding `4.0` from
-> the 4.4.5 tarball gives GPU + native DTS decode (`dca`), but that flag is gone,
-> so the panel must **stop passing `-nofix_dts`** to the `4.0` binary
-> (`StreamProcess` `dts_legacy_ffmpeg` path, ~line 947). DTS audio still decodes
-> natively; only the XUI-specific timestamp quirk is dropped.
+> `-nofix_dts` flag that does not exist in stock FFmpeg**, and the panel runs every
+> `-copyts` restream on `4.0` with it. Stock 4.4.5 without it clamps each packet
+> after a backward DTS step in the source to `last_dts+1`: frames pile up in a few
+> ms, the panel reads 200+ fps, audio drifts or drops out. So the `4.4` build
+> applies [`builds/patches/ffmpeg-4-nofix_dts.patch`](builds/patches/ffmpeg-4-nofix_dts.patch)
+> (XUI's switch and its `mux.c` relaxation, taken from the Xtream Codes source —
+> full upstream diff in [`builds/patches/xtream-codes-4.0-reference.diff`](builds/patches/xtream-codes-4.0-reference.diff)) and writes `Patches  : nofix_dts` to
+> `BUILD_INFO`; the panel's `FfmpegPaths::fixDts()` passes the flag only when it
+> sees that line. Self-test check 9 replays the DTS step.
 
 | Distro tag  | Base image     | glibc |
 |-------------|----------------|-------|
@@ -68,7 +74,7 @@ Chosen from what XC_VM code **actually invokes** (grep of `StreamProcess` /
   path (`*_cuvid`, `hevc_nvenc`, `-hwaccel cuvid`) requires this.
 - **Audio:** native `aac` + `aac_adtstoasc`, `libmp3lame`, `libfdk-aac`,
   `libopus`, `libvorbis`; **DTS decode** via the native `dca` decoder (built-in,
-  no lib, present in every version incl. the rebuilt 4.0).
+  no lib, present in every version incl. 4.4).
 - **GPU:** all three versions are built with `nvenc`/`cuvid`/`ffnvcodec`. Note the
   currently-deployed 7.1 (mardock's build) has **no** GPU support — this build
   fixes that. nv-codec-headers is pinned per ffmpeg version (n12 is too new for 4.x).
@@ -107,7 +113,7 @@ Every build **self-tests before it is packaged**: `build_ffmpeg.sh` runs
 exact glibc it was built for. Any failure aborts the build and no archive is
 produced — a broken ffmpeg never reaches a release.
 
-`test-ffmpeg.sh` asserts (version-aware for 4.0 / 7.1 / 8.1):
+`test-ffmpeg.sh` asserts (version-aware for 4.4 / 7.1 / 8.1):
 
 - **runs** — `ffmpeg`/`ffprobe -version` exit 0 (the glibc guarantee)
 - **self-contained** — no non-glibc dynamic deps (`readelf -d`)
@@ -156,11 +162,10 @@ FF=/home/xc_vm/bin/ffmpeg_bin/7.1/ffmpeg FP=.../ffprobe FF_LABEL=7.1 ./builds/te
   **with libfreetype**. `build_ffmpeg.sh` keeps `--enable-libfreetype` on and its
   `show_features` report asserts `drawtext` is present — if that line is ✗, do not
   ship the build for overlay use.
-- **FFmpeg 4.0 (`4.4.5`) uses the modern codec set** (x265 4.1, dav1d 1.5.1,
-  aom 3.11…). Some of those APIs are newer than FFmpeg 4.x expects; if a 4.0
+- **FFmpeg 4.4 (`4.4.5`) uses the modern codec set** (x265 4.1, dav1d 1.5.1,
+  aom 3.11…). Some of those APIs are newer than FFmpeg 4.x expects; if a 4.4
   build fails to link, pin older codec versions for that build (a per-version
-  codec-override hook can be added to `build_ffmpeg.sh`). Confirm the exact 4.x
-  patch against the binary currently deployed as the panel's `4.0` bucket.
+  codec-override hook can be added to `build_ffmpeg.sh`).
 
 ## Panel integration (separate task — not in this repo yet)
 

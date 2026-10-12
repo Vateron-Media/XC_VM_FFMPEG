@@ -12,7 +12,7 @@
 #   ./builds/test-ffmpeg.sh <archive.tar.gz>      # extracts, then tests
 #   FF=/path/ffmpeg FP=/path/ffprobe FF_LABEL=7.1 ./builds/test-ffmpeg.sh
 #
-# The panel bucket label (4.0 | 7.1 | 8.1) gates version-specific expectations.
+# The panel bucket label (4.4 | 7.1 | 8.1) gates version-specific expectations.
 # Taken from $FF_LABEL, else the archive/dir BUILD_INFO, else inferred.
 #
 # Exit: 0 = all hard checks passed, 1 = at least one failed.
@@ -38,14 +38,14 @@ if [[ -z "$FF" ]]; then
 fi
 trap '[[ -n "$CLEANUP_DIR" ]] && rm -rf "$CLEANUP_DIR"' EXIT
 
-# Label: env → BUILD_INFO → ffmpeg -version banner (n7.1/4.4 → 7.1/4.0…)
+# Label: env → BUILD_INFO → ffmpeg -version banner (n7.1/4.4 → 7.1/4.4…)
 if [[ -z "$FF_LABEL" ]]; then
     if [[ -n "${SRCINFO:-}" ]]; then FF_LABEL="$(sed -n 's/^Label *: *//p' "$SRCINFO" | head -1)"; fi
 fi
 if [[ -z "$FF_LABEL" ]]; then
     ver="$("$FF" -hide_banner -version 2>/dev/null | head -1)"
     case "$ver" in
-        *ersion\ 4.*|*-4.*) FF_LABEL="4.0" ;;
+        *ersion\ 4.*|*-4.*) FF_LABEL="4.4" ;;
         *ersion\ n7.*|*\ 7.*) FF_LABEL="7.1" ;;
         *ersion\ 8.*|*ersion\ n8.*) FF_LABEL="8.1" ;;
         *) FF_LABEL="?" ;;
@@ -142,6 +142,29 @@ if "$FF" -hide_banner -v error -f lavfi -i "sine=frequency=440:sample_rate=48000
     ok "ac3 encode+remux roundtrip"
 else
     bad "ac3 roundtrip FAILED ($(tail -1 "$T/ac3.log" 2>/dev/null))"
+fi
+
+# 9) 4.x: the panel's restream flags + -nofix_dts must pass a backward DTS step through.
+#    Stock ffmpeg clamps every later packet to last_dts+1: 10 s of video lands in a few
+#    ms (the panel reads 200+ fps, A/V drift). Source: 10 s at ts 100, then 10 s at 95.
+if [[ "$FF_MAJOR" == 4 ]]; then
+    for o in 100 95; do
+        "$FF" -hide_banner -v error -y -f lavfi -i "testsrc2=size=160x120:rate=25" -f lavfi -i "sine=r=48000" \
+            -t 10 -c:v libx264 -preset ultrafast -g 25 -bf 0 -c:a aac -output_ts_offset "$o" "$T/jump_$o.ts"
+    done
+    cat "$T/jump_100.ts" "$T/jump_95.ts" > "$T/jump.ts"
+    if "$FF" -hide_banner -v error -nofix_dts -start_at_zero -copyts -vsync 0 -correct_ts_overflow 0 \
+            -avoid_negative_ts disabled -max_interleave_delta 0 -i "$T/jump.ts" -c copy -f mpegts "$T/jout.ts" 2>"$T/jump.log"; then
+        # time spanned by the last 250 video packets (the second source): ~10 s passed through
+        span="$(LC_ALL=C "$FP" -v error -select_streams v:0 -show_entries packet=dts_time -of csv=p=0 "$T/jout.ts" \
+            | awk -F, '$1 ~ /^-?[0-9]/{print $1}' | tail -250 \
+            | LC_ALL=C awk 'NR==1{lo=hi=$1} {if($1<lo)lo=$1; if($1>hi)hi=$1} END{printf "%.2f", hi-lo}')"
+        LC_ALL=C awk -v s="$span" 'BEGIN{exit !(s > 5)}' \
+            && ok "-nofix_dts passes a backward DTS step through (${span}s)" \
+            || bad "-nofix_dts: 10 s after a DTS step squeezed into ${span}s (stock DTS clamp)"
+    else
+        bad "-nofix_dts restream FAILED ($(tail -1 "$T/jump.log" 2>/dev/null))"
+    fi
 fi
 rm -rf "$T"
 

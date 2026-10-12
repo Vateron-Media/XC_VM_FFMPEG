@@ -42,19 +42,18 @@ USE_CACHE=1; [[ -n "${NO_CACHE:-}" ]] && USE_CACHE=0
 
 # ── Build matrix — single source of truth (versions.json mirrors this) ─────────
 # Panel label -> ffmpeg release tarball version.
-# The "4.0" bucket is rebuilt from FFmpeg 4.4.5 (last 4.x) with GPU enabled and
-# native DTS decode. Caveat: the XUI custom "-nofix_dts" flag does NOT exist in
-# stock ffmpeg, so the panel must stop sending it to the 4.0 binary
-# (StreamProcess dts_legacy_ffmpeg path) — native `dca` decode still works.
+# A label is the build's real <major>.<minor> (the panel's FfmpegBuildsCommand::LABELS).
+# "4.4" (FFmpeg 4.4.5, last 4.x) replaces XUI's "4.0": GPU enabled, native DTS
+# decode, and XUI's "-nofix_dts" restored by builds/patches/ffmpeg-4-nofix_dts.patch.
 declare -A FFMPEG_VERSIONS=(
-    [4.0]="4.4.5"
+    [4.4]="4.4.5"
     [7.1]="7.1.5"
     [8.1]="8.1"
 )
 # Panel label -> nv-codec-headers tag (must match the ffmpeg major; n12 is too
 # new for 4.x). Passed to the builder as V_NVHEADERS.
 declare -A NVHEADERS=(
-    [4.0]="n11.1.5.3"
+    [4.4]="n11.1.5.3"
     [7.1]="n12.2.72.0"
     [8.1]="n12.2.72.0"
 )
@@ -68,7 +67,7 @@ declare -A DISTROS=(
 )
 # Deterministic ordering (assoc arrays are unordered).
 DISTRO_ORDER=(debian_12 debian_13 ubuntu_20 ubuntu_22 ubuntu_24)
-VERSION_ORDER=(4.0 7.1 8.1)
+VERSION_ORDER=(4.4 7.1 8.1)
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 msg()  { echo -e "${GREEN}>>>${NC} $*"; }

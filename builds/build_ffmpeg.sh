@@ -27,7 +27,7 @@ set -euo pipefail
 #
 # Env overrides:
 #   V_FFMPEG   — ffmpeg release tarball version to build (e.g. 7.1, 8.1)
-#   FF_LABEL   — panel bucket / asset label (e.g. 4.0, 7.1, 8.1); defaults to V_FFMPEG
+#   FF_LABEL   — panel bucket / asset label (e.g. 4.4, 7.1, 8.1); defaults to V_FFMPEG
 #   FF_DISTRO  — distro tag baked into the asset name & BUILD_INFO (e.g. ubuntu_20)
 #   OUT_DIR    — output directory (default: ./out)
 #
@@ -56,7 +56,7 @@ V_LAME="3.100"
 V_FDKAAC="2.0.3"
 # nv-codec-headers git tag (nvenc/cuvid). MUST roughly match the FFmpeg version:
 # n12.x fits FFmpeg 7.x/8.x but is too new for 4.x (configure rejects it). The
-# matrix driver sets this per build (4.0 → n11.x). Overridable via env.
+# matrix driver sets this per build (4.4 → n11.x). Overridable via env.
 V_NVHEADERS="${V_NVHEADERS:-n12.2.72.0}"
 V_LIBRTMP="master"       # rtmpdump/librtmp — no releases, track master
 V_OGG="1.3.5"
@@ -402,11 +402,18 @@ build_ffmpeg() {
         "https://ffmpeg.org/releases/ffmpeg-${V_FFMPEG}.tar.xz"
     cd "$SRC"
     make distclean 2>/dev/null || true
+    local ff_major="${V_FFMPEG%%.*}"
+
+    # 4.x stands in for XUI's 4.0, which the panel runs with `-nofix_dts`: restore
+    # that switch (see the patch header). fetch() re-extracts, so the tree is clean.
+    if [[ "$ff_major" == 4 ]]; then
+        patch -p1 --forward < "$(cd "$(dirname "$0")" && pwd)/patches/ffmpeg-4-nofix_dts.patch" \
+            || die "ffmpeg-4-nofix_dts.patch does not apply to FFmpeg ${V_FFMPEG}"
+    fi
 
     # ffmpeg-level libfribidi/libharfbuzz options only exist from 6.1+; the 4.x
     # bucket (XUI's legacy DTS binary) predates them and configure would abort.
     # libass still links fribidi/harfbuzz internally, so text rendering is intact.
-    local ff_major="${V_FFMPEG%%.*}"
     local text_shaping="--enable-libfribidi --enable-libharfbuzz"
     if ! [ "${ff_major:-0}" -ge 5 ] 2>/dev/null; then
         text_shaping=""
@@ -520,6 +527,8 @@ glibc    : $(ldd --version 2>/dev/null | head -1 | awk '{print $NF}')
 Arch     : $(uname -m)
 Strategy : all codecs static, glibc dynamic (verified self-contained)
 EOF
+    # The panel passes -nofix_dts to a 4.x build only when this line says it takes it.
+    [[ "${V_FFMPEG%%.*}" == 4 ]] && echo "Patches  : nofix_dts" >> "$stage/BUILD_INFO"
 
     # Self-test on this exact glibc BEFORE blessing the archive — a broken build
     # must never be packaged. Runs the full battery in test-ffmpeg.sh.

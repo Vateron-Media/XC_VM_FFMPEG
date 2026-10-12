@@ -2,15 +2,15 @@
   "_comment": "Build matrix for XC_VM_FFMPEG. Source of truth for local builds is the bash arrays in build_ffmpeg_all.sh; this file mirrors them for humans. Keep in sync.",
 
   "ffmpeg_versions": {
-    "_comment": "panel label -> ffmpeg release tarball to compile per-distro (all GPU-enabled). 4.0 rebuilt from 4.4.5; the XUI '-nofix_dts' custom flag is absent from stock ffmpeg (native dca decode still works) — panel must stop sending it.",
-    "4.0": "4.4.5",
+    "_comment": "panel label -> ffmpeg release tarball to compile per-distro (all GPU-enabled). Label = the build's real <major>.<minor> (panel FfmpegBuildsCommand::LABELS); 4.4 replaces XUI's 4.0, built from 4.4.5 + builds/patches/ffmpeg-4-nofix_dts.patch (XUI's '-nofix_dts', which the panel passes on -copyts restreams).",
+    "4.4": "4.4.5",
     "7.1": "7.1.5",
     "8.1": "8.1"
   },
 
   "nv_codec_headers": {
     "_comment": "per-ffmpeg-version nv-codec-headers tag (n12 is too new for 4.x).",
-    "4.0": "n11.1.5.3",
+    "4.4": "n11.1.5.3",
     "7.1": "n12.2.72.0",
     "8.1": "n12.2.72.0"
   },

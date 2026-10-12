@@ -3,3 +3,4 @@
 !builds/install_tools.sh
 !builds/build_ffmpeg.sh
 !builds/test-ffmpeg.sh
+!builds/patches/*.patch
